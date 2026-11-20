@@ -1,5 +1,10 @@
 # Enterprise remediation — 2026-11-20
 
+## Additional dependency remediation
+
+- Migrated API configuration validation to Zod 4.6.7. Updated compatible transitive packages and scoped overrides to the needed dependency branches. Audit now reports 1 high and 20 moderate issues. The high issue remains in Metro's image-size dependency. Expo-related advisories also remain open.
+- Android Metro export passed with the updated dependency tree. The authenticated PDF API regression remains in the suite. On-device login and document submission, and Firebase delivery with a development build, are still unverified.
+
 ## Dependency refresh and authenticated PDF regression
 
 - Fastify 5.12.8, Kysely 0.28.20 and Vite 6.4.6 are locked. Fastify and Vite are deduplicated across the workspace. Audit is down to 11 high and 29 moderate advisories. Expo, Zod and remaining transitive advisories are open.
