@@ -1,5 +1,11 @@
 # Enterprise remediation — 2026-11-20
 
+## Dependency refresh and authenticated PDF regression
+
+- Fastify 5.12.8, Kysely 0.28.20 and Vite 6.4.6 are locked. Fastify and Vite are deduplicated across the workspace. Audit is down to 11 high and 29 moderate advisories. Expo, Zod and remaining transitive advisories are open.
+- The PDF API regression uses a database-backed bearer session against the ordinary server. It verifies authentication, stored bytes, and a status response that omits the document. On-device submission after login remains unverified.
+- ADB detected the Pixel emulator. Its installed APK did not contain the Firebase app ID or sender ID resources, and the workspace search found no google-services.json outside dependencies. No live FCM send was attempted. A Firebase-configured development build and matching Expo FCM credentials are required for delivery verification.
+
 ## Trust, PDF and push receipts
 
 - Feed trust uses grouped queries across sellers. The database regression verifies distinct listing counts for two sellers.
