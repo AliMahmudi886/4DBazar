@@ -25,5 +25,15 @@ test("isolated PostgreSQL: OTP single consumption, attempt cap, disabled account
     const session = await createSessionPair(db, user.id, `fixture-${phone}`, "test-secret");
     const refreshed = await Promise.all(Array.from({ length: 12 }, () => rotateSessionPair(db, session.refreshToken, "test-secret")));
     assert.equal(refreshed.filter(Boolean).length, 1);
+    const rollbackPhone = phone + "-rollback";
+    const challenge = { phoneNumber: rollbackPhone, codeHash: "fixture" };
+    await createOtpChallenge(db, { ...challenge, expiresAt: new Date(Date.now() + 60000), maxAttempts: 5 });
+    await assert.rejects(db.transaction().execute(async (trx) => {
+      assert.equal(await verifyOtpChallenge(trx, challenge), true);
+      await createSessionPair(trx, user.id, "rollback-fixture", "test-secret");
+      throw new Error("simulated issuance failure");
+    }), /simulated issuance failure/);
+    assert.equal(await verifyOtpChallenge(db, challenge), true);
+    assert.equal(await db.selectFrom("sessions").select("id").where("token_hash", "=", "rollback-fixture").executeTakeFirst(), undefined);
   } finally { await db.destroy(); }
 });

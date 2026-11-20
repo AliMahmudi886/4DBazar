@@ -250,12 +250,12 @@ test("otp request rate limits repeated requests for the same phone", async () =>
   assert.equal(limited.statusCode, 429);
 });
 
-test("auth verify otp rejects invalid code", async () => {
+test("auth verify otp rejects malformed code without querying the database", async () => {
   const app = buildServer(loadConfig({ NODE_ENV: "test" }));
   const response = await app.inject({
     method: "POST",
     url: "/api/v1/auth/verify-otp",
-    payload: { phone_number: "+989000000000", otp: "000000" }
+    payload: { phone_number: "+989000000000", otp: "invalid" }
   });
 
   assert.equal(response.statusCode, 400);

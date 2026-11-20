@@ -199,7 +199,7 @@ export async function createSessionPair(db: Kysely<Database>, userId: string, to
   const refreshExpiresAt = new Date(now.getTime() + 1000 * 60 * 60 * 24 * 90);
   const refreshToken = createSessionToken();
 
-  await db.transaction().execute(async (trx) => {
+  const insertPair = async (trx: Kysely<Database>) => {
     await trx.insertInto("sessions").values({
       id: sessionId,
       user_id: userId,
@@ -216,7 +216,9 @@ export async function createSessionPair(db: Kysely<Database>, userId: string, to
       revoked_at: null,
       created_at: now
     }).execute();
-  });
+  };
+  if (db.isTransaction) await insertPair(db);
+  else await db.transaction().execute(insertPair);
 
   return { accessExpiresAt, refreshExpiresAt, refreshToken };
 }

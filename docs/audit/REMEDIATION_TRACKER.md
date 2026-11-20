@@ -1,5 +1,12 @@
 # Enterprise remediation — 2026-11-20
 
+## Follow-up
+
+- OTP verification and session creation now commit together. Failed attempts still commit their counters. The isolated database suite checks rollback of the code and session.
+- Both admin review routes persist the decision and database audit event in one transaction. The legacy route requires a pending document for approval or rejection. The account endpoint no longer treats a profile flag as evidence of identity verification.
+- The outbox retries when every eligible destination fails and accounts for Expo receipt errors when available. Provider acceptance is distinct from device delivery. Persistent receipt polling, partial delivery retries and real-device checks remain open.
+- Authorized unpublished listing preview, batched trust summaries, native document upload and remaining dependency advisories still require work. No production deployment.
+
 ## Current increment (supersedes older status below)
 
 User authorized isolated fixture headers, remediation, tests and push to `audit/enterprise-marketplace-transformation`. Explicitly NO server deployment.

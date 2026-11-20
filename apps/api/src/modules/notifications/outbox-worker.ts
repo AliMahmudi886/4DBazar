@@ -11,7 +11,10 @@ export async function processNotificationOutbox(db: Kysely<Database>, config: Ap
   for (const job of jobs) {
     if (!(await markNotificationProcessing(db, job.id))) continue;
     try {
-      await sendUserPushNotification(db, config, { userId: job.user_id, title: job.title, body: job.body, tag: job.tag, ...(job.url ? { url: job.url } : {}) });
+      const delivery = await sendUserPushNotification(db, config, { userId: job.user_id, title: job.title, body: job.body, tag: job.tag, ...(job.url ? { url: job.url } : {}) }, { requireNativeLookup: true });
+      const accepted = delivery.sent + delivery.native_sent;
+      const remaining = delivery.attempted + delivery.native_attempted - delivery.revoked - delivery.native_revoked;
+      if (accepted === 0 && remaining > 0) throw new Error("push_provider_did_not_accept_notification");
       await markNotificationSent(db, job.id);
       processed += 1;
     } catch (error) {

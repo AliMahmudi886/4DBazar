@@ -369,23 +369,33 @@ export function buildServer(config: AppConfig, options: { testHeaderAuth?: boole
   }>("/api/v1/auth/verify-otp", async (request, reply) => {
     const phoneNumber = normalizeIranPhone(request.body.phone_number);
     const otpCode = normalizeOtpCode(request.body.otp);
-    if (!phoneNumber || !otpCode || !(await otp.verify(phoneNumber, otpCode))) {
-      throw new AppError("invalid_otp", "کد تایید معتبر نیست یا منقضی شده است.", 400, {
-        otp: ["کد تایید اشتباه است."]
-      });
-    }
+    const invalidOtp = () => new AppError("invalid_otp", "کد تایید معتبر نیست یا منقضی شده است.", 400, {
+      otp: ["کد تایید اشتباه است."]
+    });
+    if (!phoneNumber || !otpCode) throw invalidOtp();
 
     try {
-      const user = await ensureVerifiedUser(db, phoneNumber);
-      if (user.status !== "active") throw new AppError("forbidden", "این حساب امکان ورود ندارد.", 403);
-      await grantUserRole(db, user.id, "user");
-      if (getAdminPhoneNumbers(config.ADMIN_PHONE_NUMBERS).has(phoneNumber)) {
-        await grantUserRole(db, user.id, "moderator");
-        await grantUserRole(db, user.id, "admin");
-      }
-      const token = createSessionToken();
-      const session = await createSessionPair(db, user.id, hashSessionToken(token, config.SESSION_SECRET), config.SESSION_SECRET);
-
+      const result = await db.transaction().execute(async (trx) => {
+        const verified = await verifyOtpChallenge(trx, {
+          phoneNumber,
+          codeHash: hashOtpCode(phoneNumber, otpCode, config.SESSION_SECRET)
+        });
+        // Commit failed-attempt counters before returning a validation error.
+        if (!verified) return { outcome: "invalid" } as const;
+        const user = await ensureVerifiedUser(trx, phoneNumber);
+        if (user.status !== "active") return { outcome: "inactive" } as const;
+        await grantUserRole(trx, user.id, "user");
+        if (getAdminPhoneNumbers(config.ADMIN_PHONE_NUMBERS).has(phoneNumber)) {
+          await grantUserRole(trx, user.id, "moderator");
+          await grantUserRole(trx, user.id, "admin");
+        }
+        const token = createSessionToken();
+        const session = await createSessionPair(trx, user.id, hashSessionToken(token, config.SESSION_SECRET), config.SESSION_SECRET);
+        return { outcome: "authenticated", user, token, session } as const;
+      });
+      if (result.outcome === "invalid") throw invalidOtp();
+      if (result.outcome === "inactive") throw new AppError("forbidden", "این حساب امکان ورود ندارد.", 403);
+      const { user, token, session } = result;
       reply.status(201).send({
         data: {
           token,
@@ -400,8 +410,8 @@ export function buildServer(config: AppConfig, options: { testHeaderAuth?: boole
         }
       });
     } catch (error) {
-      request.log.error({ err: error }, "OTP verification session creation failed");
       if (error instanceof AppError) throw error;
+      request.log.error({ err: error }, "OTP verification session creation failed");
       throw new AppError("service_unavailable", "امکان ساخت نشست در حال حاضر وجود ندارد.", 503);
     }
   });
@@ -511,7 +521,7 @@ export function buildServer(config: AppConfig, options: { testHeaderAuth?: boole
       phone_number: user?.phone_number ?? null,
       created_at: user?.created_at ?? null,
       account_status: user?.status ?? null,
-      identity_verification_status: identityVerification?.status ?? (profile?.verification_status === "verified" || profile?.verification_status === "rejected" ? profile.verification_status : "not_implemented"),
+      identity_verification_status: identityVerification?.status ?? "not_implemented",
       mobile_verified: request.user!.mobileVerified,
         roles: request.user!.roles,
         profile: profile
@@ -1345,12 +1355,19 @@ export function buildServer(config: AppConfig, options: { testHeaderAuth?: boole
   app.post<{ Params: { id: string }; Body: { decision?: "approve" | "reject" | "revoke"; reason?: string } }>("/api/v1/admin/identity-verifications/:id/decision", { preHandler: [requireRole("admin")] }, async (request) => {
     const decision = request.body?.decision;
     if (decision !== "approve" && decision !== "reject" && decision !== "revoke") throw new AppError("validation_failed", "تصمیم احراز هویت معتبر نیست.", 400);
-    const requestRow = await db.selectFrom("identity_verification_requests").select(["id", "user_id"]).where("id", "=", request.params.id).executeTakeFirst();
-    if (!requestRow) throw new AppError("not_found", "درخواست احراز هویت پیدا نشد.", 404);
     const status = decision === "approve" ? "verified" : "rejected";
-    const reviewedAt = new Date();
-    await db.updateTable("identity_verification_requests").set({ ...identityDecisionFields(decision, reviewedAt, request.body?.reason), reviewed_by: request.user!.id }).where("id", "=", request.params.id).execute();
-    await audit.record({ actorUserId: request.user!.id, action: decision === "revoke" ? "identity_verification.revoked" : "identity_verification.reviewed", targetType: "user", targetId: requestRow.user_id, metadata: { requestId: request.params.id, decision } });
+    await db.transaction().execute(async (trx) => {
+      const row = await trx.selectFrom("identity_verification_requests").select(["user_id", "status"])
+        .where("id", "=", request.params.id).forUpdate().executeTakeFirst();
+      if (!row) throw new AppError("not_found", "درخواست احراز هویت پیدا نشد.", 404);
+      if (row.status !== (decision === "revoke" ? "verified" : "pending")) {
+        throw new AppError("validation_failed", "این تصمیم برای وضعیت فعلی درخواست معتبر نیست.", 409);
+      }
+      await trx.updateTable("identity_verification_requests")
+        .set({ ...identityDecisionFields(decision, new Date(), request.body?.reason), reviewed_by: request.user!.id })
+        .where("id", "=", request.params.id).execute();
+      await new DatabaseAuditLogger(trx).record({ actorUserId: request.user!.id, action: decision === "revoke" ? "identity_verification.revoked" : "identity_verification.reviewed", targetType: "user", targetId: row.user_id, metadata: { requestId: request.params.id, decision } });
+    });
     return { data: { id: request.params.id, status } };
   });
 
@@ -1360,13 +1377,23 @@ export function buildServer(config: AppConfig, options: { testHeaderAuth?: boole
   app.put<{ Params: { userId: string }; Body: { status?: "verified" | "rejected" | "profile_complete" } }>("/api/v1/admin/users/:userId/verification", { preHandler: [requireRole("admin")] }, async (request) => {
     const status = request.body.status;
     if (status !== "verified" && status !== "rejected" && status !== "profile_complete") throw new AppError("validation_failed", "وضعیت احراز هویت معتبر نیست.", 400);
-    const profile = await db.updateTable("user_profiles").set({ verification_status: status, updated_at: new Date() }).where("user_id", "=", request.params.userId).returningAll().executeTakeFirst();
-    if (!profile) throw new AppError("not_found", "پروفایل کاربر پیدا نشد.", 404);
-    if (status === "verified" || status === "rejected") {
-      const pendingIdentity = await db.selectFrom("identity_verification_requests").select("id").where("user_id", "=", request.params.userId).where("status", "=", "pending").orderBy("created_at", "desc").executeTakeFirst();
-      if (pendingIdentity) { const reviewedAt = new Date(); await db.updateTable("identity_verification_requests").set({ ...identityDecisionFields(status === "verified" ? "approve" : "reject", reviewedAt), reviewed_by: request.user!.id }).where("id", "=", pendingIdentity.id).execute(); }
-    }
-    await audit.record({ actorUserId: request.user!.id, action: "user.verification_updated", targetType: "user", targetId: request.params.userId, metadata: { status } });
+    const profile = await db.transaction().execute(async (trx) => {
+      const now = new Date();
+      const updated = await trx.updateTable("user_profiles").set({ verification_status: status, updated_at: now })
+        .where("user_id", "=", request.params.userId).returningAll().executeTakeFirst();
+      if (!updated) throw new AppError("not_found", "پروفایل کاربر پیدا نشد.", 404);
+      if (status === "verified" || status === "rejected") {
+        const pending = await trx.selectFrom("identity_verification_requests").select("id")
+          .where("user_id", "=", request.params.userId).where("status", "=", "pending")
+          .orderBy("created_at", "desc").forUpdate().executeTakeFirst();
+        if (!pending) throw new AppError("validation_failed", "درخواست احراز هویت در انتظار بررسی وجود ندارد.", 409);
+        await trx.updateTable("identity_verification_requests")
+          .set({ ...identityDecisionFields(status === "verified" ? "approve" : "reject", now), reviewed_by: request.user!.id })
+          .where("id", "=", pending.id).execute();
+      }
+      await new DatabaseAuditLogger(trx).record({ actorUserId: request.user!.id, action: "user.verification_updated", targetType: "user", targetId: request.params.userId, metadata: { status } });
+      return updated;
+    });
     return { data: profile };
   });
   app.get("/api/v1/admin/support", { preHandler: [requireRole("moderator")] }, async () => ({ data: await listSupportTickets(db) }));

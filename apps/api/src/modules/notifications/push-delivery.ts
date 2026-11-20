@@ -60,12 +60,13 @@ async function sendNativePushNotifications(db: Kysely<Database>, config: AppConf
   const tokens = await listDeliverableNativePushTokens(db, input.userId);
   if (!tokens.length) return { attempted: 0, sent: 0, revoked: 0, failed: 0 };
   const response = await fetch(`${config.EXPO_PUSH_API_URL}/send`, {
+    signal: AbortSignal.timeout(10000),
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(tokens.map((item) => ({ to: item.token, title: input.title, body: input.body, sound: "default", data: { conversationId: input.tag, url: input.url ?? "/profile" } })))
-  });
-  if (!response.ok) throw new Error(`expo_push_http_${response.status}`);
-  const tickets = parseExpoPushTickets(await response.json());
+  }).catch(() => null);
+  if (!response?.ok) return { attempted: tokens.length, sent: 0, revoked: 0, failed: tokens.length };
+  const tickets = parseExpoPushTickets(await response.json().catch(() => null));
   let sent = 0;
   let revoked = 0;
   let failed = 0;
@@ -73,8 +74,8 @@ async function sendNativePushNotifications(db: Kysely<Database>, config: AppConf
   await Promise.all(tokens.map(async (item, index) => {
     const ticket = tickets[index];
     if (ticket?.status === "ok") sent += 1;
-    if (ticket?.id) ticketIds.push(ticket.id);
-    if (ticket?.status === "error") failed += 1;
+    if (ticket?.status === "ok" && ticket.id) ticketIds.push(ticket.id);
+    if (ticket?.status !== "ok") failed += 1;
     if (ticket?.details?.error === "DeviceNotRegistered") { await revokeNativePushTokenById(db, item.id); revoked += 1; }
   }));
   if (ticketIds.length) {
@@ -84,7 +85,7 @@ async function sendNativePushNotifications(db: Kysely<Database>, config: AppConf
       if (receiptResponse.ok) {
         const receipts = await receiptResponse.json() as { data?: Record<string, { status?: string; details?: { error?: string } }> };
         for (const [ticketId, receipt] of Object.entries(receipts.data ?? {})) {
-          if (receipt.status === "error") failed += 1;
+          if (receipt.status === "error" && ticketIds.includes(ticketId)) { failed += 1; sent -= 1; }
           if (receipt.details?.error === "DeviceNotRegistered") {
             const index = tickets.findIndex((ticket) => ticket.id === ticketId);
             const token = index >= 0 ? tokens[index] : undefined;
@@ -100,9 +101,13 @@ async function sendNativePushNotifications(db: Kysely<Database>, config: AppConf
 export async function sendUserPushNotification(
   db: Kysely<Database>,
   config: AppConfig,
-  input: PushNotificationInput
+  input: PushNotificationInput,
+  options: { requireNativeLookup?: boolean } = {}
 ): Promise<PushDeliveryResult> {
-  const native = await sendNativePushNotifications(db, config, input).catch(() => ({ attempted: 0, sent: 0, revoked: 0, failed: 0 }));
+  const native = await sendNativePushNotifications(db, config, input).catch((error: unknown) => {
+    if (options.requireNativeLookup) throw error;
+    return { attempted: 0, sent: 0, revoked: 0, failed: 0 };
+  });
   if (!isPushDeliveryConfigured(config)) return { attempted: 0, sent: 0, skipped: native.attempted === 0, revoked: 0, native_attempted: native.attempted, native_sent: native.sent, native_revoked: native.revoked, native_failed: native.failed };
   webPush.setVapidDetails(config.VAPID_SUBJECT, config.VAPID_PUBLIC_KEY!, config.VAPID_PRIVATE_KEY!);
   const subscriptions = await listDeliverablePushSubscriptions(db, input.userId);
