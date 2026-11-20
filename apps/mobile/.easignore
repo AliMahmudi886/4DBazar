@@ -1,0 +1,14 @@
+node_modules/
+**/node_modules/**
+.expo/
+**/.expo/**
+dist/
+**/dist/**
+dist-export/
+**/dist-export/**
+**/.git/**
+*.log
+.env
+.env.*
+!.env.example
+android/

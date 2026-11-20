@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: four-d-postgres
+    environment:
+      POSTGRES_DB: four_d
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "55432:5432"
+    volumes:
+      - four_d_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d four_d"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  four_d_postgres_data:

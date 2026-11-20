@@ -1,0 +1,61 @@
+{
+  "name": "4d",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @four-d/shared && npm run build -w @four-d/api && npm run build -w @four-d/web",
+    "check": "tsc -b --pretty false",
+    "ci:local": "npm run check && npm run build && npm run bundle:check && npm test && npm run qa:visual",
+    "test": "node scripts/test-source.mjs",
+    "dev:api": "npm run dev -w @four-d/api",
+    "dev:web": "npm run dev -w @four-d/web",
+    "dev:mobile": "npm run start -w @four-d/mobile",
+    "docker:up": "docker compose up -d postgres",
+    "docker:down": "docker compose down",
+    "db:migrate": "npm run db:migrate -w @four-d/api",
+    "db:migrate:compiled": "node apps/api/dist/db/migrate.js",
+    "db:seed": "npm run db:seed -w @four-d/api",
+    "db:seed:demo": "node scripts/seed-demo-data.mjs",
+    "db:cleanup:otp": "npm run db:cleanup:otp -w @four-d/api",
+    "db:cleanup:analytics": "npm run db:cleanup:analytics -w @four-d/api",
+    "db:cleanup:market": "npm run db:cleanup:market -w @four-d/api",
+    "db:cleanup:market:compiled": "node apps/api/dist/db/cleanup-market.js",
+    "qa:visual": "npm run qa:visual -w @four-d/web",
+    "qa:quality": "npm run qa:quality -w @four-d/web",
+    "bundle:check": "npm run bundle:check -w @four-d/web",
+    "release:check": "node scripts/release-preflight.mjs",
+    "smoke:hosted": "node scripts/hosted-smoke.mjs",
+    "smoke:hosted:auth": "node scripts/hosted-auth-smoke.mjs",
+    "load:test:300": "node scripts/load-test-300.mjs",
+    "mobile:release:check": "node scripts/mobile-release-preflight.mjs",
+    "release:cpanel": "node scripts/prepare-cpanel-release.mjs",
+    "media:backup": "node scripts/backup-local-media.mjs backup",
+    "media:verify": "node scripts/backup-local-media.mjs verify",
+    "media:restore": "node scripts/restore-local-media.mjs",
+    "push:vapid": "npm run push:vapid -w @four-d/api",
+    "sms:smoke": "npm run sms:smoke -w @four-d/api",
+    "notifications:worker": "npm run notifications:worker -w @four-d/api",
+    "notifications:worker:compiled": "node apps/api/dist/scripts/notifications-worker.js",
+    "mobile:build:android:development": "npm run build:android:development -w @four-d/mobile",
+    "mobile:build:android:preview": "npm run build:android:preview -w @four-d/mobile",
+    "mobile:build:android:production": "npm run build:android:production -w @four-d/mobile"
+  },
+  "dependencies": {
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "overrides": {
+    "@types/react": "19.0.14",
+    "expo": "53.0.27",
+    "shell-quote": "^1.11.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2"
+  }
+}

@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /profile
+
+Sitemap: https://4dbazar.ir/sitemap.xml

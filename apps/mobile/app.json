@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "4D",
+    "slug": "four-d",
+    "version": "0.1.15",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "four-d",
+    "icon": "./assets/4d-app-icon.png",
+    "splash": {
+      "image": "./assets/4d-app-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F6F8F7"
+    },
+    "android": {
+      "package": "ir.fourd.market",
+      "versionCode": 19,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/4d-adaptive-foreground.png",
+        "backgroundColor": "#FFFFFF"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "ir.fourd.market",
+      "buildNumber": "13"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "microphonePermission": false,
+          "photosPermission": "برای افزودن تصویر به آگهی یا گفتگو، 4D به تصاویر انتخابی شما دسترسی می‌خواهد."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/4d-adaptive-foreground.png",
+          "color": "#009688"
+        }
+      ],
+      "expo-secure-store"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "5d528f25-bf98-49a0-9c4d-830c66477cf7"
+      }
+    },
+    "owner": "haj-ali"
+  }
+}

@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - audit/enterprise-marketplace-transformation
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: isolated-ci-only
+          POSTGRES_DB: fourd_audit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:isolated-ci-only@127.0.0.1:5432/fourd_audit
+      FOURD_TEST_DATABASE_URL: postgresql://postgres:isolated-ci-only@127.0.0.1:5432/fourd_audit
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run check
+
+      - name: Mobile typecheck
+        run: npm run typecheck -w @four-d/mobile
+
+      - name: Migrate isolated database
+        run: npm run db:migrate
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      - name: Bundle budget
+        run: npm run bundle:check
+
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Visual QA
+        run: npm run qa:visual
