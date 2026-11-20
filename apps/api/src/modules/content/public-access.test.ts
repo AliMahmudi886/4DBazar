@@ -4,6 +4,7 @@ import test from "node:test";
 import { createDatabase } from "../../db/database.js";
 import { ensureVerifiedUser } from "../auth/repository.js";
 import { assertPublicContent } from "./public-access.js";
+import { getPublicTrustSummaries } from "../business/repository.js";
 import { buildFixtureServer } from "../../testing/fixture-server.js";
 import { loadConfig } from "../../config.js";
 import { addFavorite, listUserFavoriteIds, removeFavorite } from "./favorites.js";
@@ -31,6 +32,10 @@ test("isolated PostgreSQL: publication boundaries and idempotent favorites", { s
     assert.equal((await app.inject({ url: detailUrl, headers: { "x-4d-user-id": crypto.randomUUID(), "x-4d-roles": "moderator" } })).statusCode, 200);
     await db.updateTable("market_contents").set({ status: "approved" }).where("id", "=", id).execute();
     await assertPublicContent(db, id);
+    const secondSeller = await ensureVerifiedUser(db, `audit-other-${crypto.randomUUID().slice(0, 16)}`);
+    const trust = await getPublicTrustSummaries(db, [owner.id, secondSeller.id]);
+    assert.equal(trust.get(owner.id)?.approved_listings, 1);
+    assert.equal(trust.get(secondSeller.id)?.approved_listings, 0);
     await Promise.all(Array.from({ length: 8 }, () => addFavorite(db, owner.id, id)));
     assert.deepEqual(await listUserFavoriteIds(db, owner.id), [id]);
     await Promise.all([removeFavorite(db, owner.id, id), removeFavorite(db, owner.id, id)]);

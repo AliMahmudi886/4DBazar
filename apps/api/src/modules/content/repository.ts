@@ -4,7 +4,7 @@ import type { Database } from "../../db/types.js";
 
 export const PUBLIC_FEED_STATUS = "approved" as const;
 import { attachMediaAssets, listMediaForContents } from "../media/repository.js";
-import { getPublicTrustSummary } from "../business/repository.js";
+import { getPublicTrustSummary, getPublicTrustSummaries } from "../business/repository.js";
 
 export interface CreateListingInput {
   contentType: "listing" | "service_listing";
@@ -412,8 +412,7 @@ export async function listFeedContents(db: Kysely<Database>, related?: { exclude
   const rows = await query.limit(related ? 3 : 50).execute();
   const media = await listMediaForContents(db, rows.map((row) => row.id));
   const viewCounts = await listViewCounts(db, rows.map((row) => row.id));
-  const trust = new Map(await Promise.all([...new Set(rows.map(row => row.owner_user_id))]
-    .map(async id => [id, await getPublicTrustSummary(db, id).catch(() => null)] as const)));
+  const trust = await getPublicTrustSummaries(db, [...new Set(rows.map(row => row.owner_user_id))]).catch(() => new Map());
   return rows.map(row => ({ ...row, media: media.get(row.id) ?? [], view_count: viewCounts.get(row.id) ?? 0, seller_trust: trust.get(row.owner_user_id) ?? null }));
 }
 

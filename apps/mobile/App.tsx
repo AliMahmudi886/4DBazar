@@ -3,6 +3,8 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system";
 import * as Notifications from "expo-notifications";
 import { PuzzleCaptcha } from "./components/PuzzleCaptcha";
 import {
@@ -3684,14 +3686,14 @@ function ChatScreenV3({
 
 function IdentityDocumentForm({ token, onSubmitted }: { token: string; onSubmitted: () => void }) {
   const [kind, setKind] = useState("national_card");
-  const [photo, setPhoto] = useState<string>();
+  const [document, setDocument] = useState<{ dataUrl: string; label: string }>();
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const kinds = [["national_card", "کارت ملی"], ["birth_certificate", "شناسنامه"], ["passport", "گذرنامه"]] as const;
 
   async function choosePhoto() {
     setMessage("");
-    setPhoto(undefined);
+    setDocument(undefined);
     try {
       const selection = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], base64: true, quality: 0.8 });
       if (selection.canceled) return;
@@ -3700,22 +3702,48 @@ function IdentityDocumentForm({ token, onSubmitted }: { token: string; onSubmitt
         setMessage("تصویر خوانا با حجم کمتر از ۵ مگابایت انتخاب کنید.");
         return;
       }
-      setPhoto(base64);
+      setDocument({ dataUrl: `data:image/jpeg;base64,${base64}`, label: "تصویر مدرک" });
     } catch {
       setMessage("باز کردن تصاویر ممکن نشد.");
     }
   }
 
+  async function choosePdf() {
+    setBusy(true);
+    setMessage("");
+    try {
+      const selection = await DocumentPicker.getDocumentAsync({ type: "application/pdf", copyToCacheDirectory: true });
+      if (selection.canceled) return;
+      const file = selection.assets[0];
+      if (!file) return;
+      try {
+        const info = await FileSystem.getInfoAsync(file.uri);
+        if (!info.exists || info.size <= 0 || info.size > 5_000_000) {
+          setMessage("حجم PDF باید حداکثر ۵ مگابایت باشد.");
+          return;
+        }
+        const base64 = await FileSystem.readAsStringAsync(file.uri, { encoding: FileSystem.EncodingType.Base64 });
+        setDocument({ dataUrl: `data:application/pdf;base64,${base64}`, label: file.name });
+      } finally {
+        await FileSystem.deleteAsync(file.uri, { idempotent: true }).catch(() => undefined);
+      }
+    } catch {
+      setMessage("خواندن PDF ممکن نشد.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submit() {
-    if (!photo || busy) return;
+    if (!document || busy) return;
     setBusy(true);
     setMessage("");
     try {
       await api("/api/v1/me/identity-verification", {
         method: "POST",
-        body: JSON.stringify({ document_type: kind, document_data_url: `data:image/jpeg;base64,${photo}` })
+        body: JSON.stringify({ document_type: kind, document_data_url: document.dataUrl })
       }, token);
-      setPhoto(undefined);
+      setDocument(undefined);
       onSubmitted();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "ارسال مدرک انجام نشد.");
@@ -3735,9 +3763,13 @@ function IdentityDocumentForm({ token, onSubmitted }: { token: string; onSubmitt
         </Pressable>
       ))}
       <Pressable style={styles.secondary} disabled={busy} onPress={() => void choosePhoto()}>
-        <Text>{photo ? "تغییر تصویر انتخاب‌شده" : "انتخاب تصویر مدرک"}</Text>
+        <Text>انتخاب تصویر مدرک</Text>
       </Pressable>
-      {photo ? <Pressable style={styles.secondary} disabled={busy} onPress={() => void submit()}>
+      <Pressable style={styles.secondary} disabled={busy} onPress={() => void choosePdf()}>
+        <Text>انتخاب PDF</Text>
+      </Pressable>
+      {document ? <Text>{document.label}</Text> : null}
+      {document ? <Pressable style={styles.secondary} disabled={busy} onPress={() => void submit()}>
         <Text>{busy ? "در حال ارسال…" : "ارسال برای بررسی"}</Text>
       </Pressable> : null}
       {message ? <Text accessibilityLiveRegion="polite">{message}</Text> : null}

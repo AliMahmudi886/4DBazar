@@ -401,6 +401,14 @@ export interface Database {
   conversation_blocks: ConversationBlocksTable;
   push_subscriptions: PushSubscriptionsTable;
   native_push_tokens: NativePushTokensTable;
+  native_push_receipts: {
+    ticket_id: string;
+    token_id: string;
+    status: "pending" | "accepted" | "error" | "expired";
+    provider_error: string | null;
+    next_check_at: Timestamp;
+    expires_at: Timestamp;
+  };
   notification_outbox: NotificationOutboxTable;
   favorites: FavoritesTable;
   analytics_events: AnalyticsEventsTable;

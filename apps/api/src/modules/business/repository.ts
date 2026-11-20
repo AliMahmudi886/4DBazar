@@ -40,39 +40,53 @@ export async function upsertBusinessProfile(db: Kysely<Database>, userId: string
 }
 
 export async function getPublicTrustSummary(db: Kysely<Database>, userId: string) {
-  const [user, profile, identity, storefront, listingCount, conversationCount, respondedConversationCount] = await Promise.all([
-    db.selectFrom("users").select(["phone_verified_at", "created_at", "status"]).where("id", "=", userId).executeTakeFirst(),
-    db.selectFrom("user_profiles").select(["first_name", "last_name", "display_name", "verification_status"]).where("user_id", "=", userId).executeTakeFirst(),
-    db.selectFrom("identity_verification_requests").select(["status", "verified_at"]).where("user_id", "=", userId).orderBy("created_at", "desc").executeTakeFirst().catch(() => undefined),
-    db.selectFrom("storefronts").select(["status", "verified_at"]).where("owner_user_id", "=", userId).executeTakeFirst().catch(() => undefined),
-    db.selectFrom("market_contents").select((eb) => eb.fn.countAll<number>().as("count")).where("owner_user_id", "=", userId).where("status", "=", "approved").where("deleted_at", "is", null).executeTakeFirst(),
-    db.selectFrom("conversations").select((eb) => eb.fn.countAll<number>().as("count")).where("seller_user_id", "=", userId).executeTakeFirst(),
-    db.selectFrom("conversations").innerJoin("conversation_messages", "conversation_messages.conversation_id", "conversations.id").select("conversations.id").where("conversations.seller_user_id", "=", userId).where("conversation_messages.sender_user_id", "=", userId).groupBy("conversations.id").execute()
+  return (await getPublicTrustSummaries(db, [userId])).get(userId) ?? null;
+}
+export async function getPublicTrustSummaries(db: Kysely<Database>, ids: string[]) {
+  if (!ids.length) return new Map<string, never>();
+  const [users, profiles, identities, storefronts, listings, conversations, responses, violations] = await Promise.all([
+    db.selectFrom("users").select(["phone_verified_at", "created_at", "status"]).select("id").where("id", "in", ids).execute(),
+    db.selectFrom("user_profiles").select(["first_name", "last_name", "display_name", "verification_status"]).select("user_id").where("user_id", "in", ids).execute(),
+    db.selectFrom("identity_verification_requests").select(["status", "verified_at"]).select("user_id").distinctOn("user_id").where("user_id", "in", ids).orderBy("user_id").orderBy("created_at", "desc").orderBy("id", "desc").execute().catch(() => []),
+    db.selectFrom("storefronts").select(["status", "verified_at"]).select("owner_user_id").where("owner_user_id", "in", ids).execute().catch(() => []),
+    db.selectFrom("market_contents").select((eb) => eb.fn.countAll<number>().as("count")).select("owner_user_id").where("owner_user_id", "in", ids).where("status", "=", "approved").where("deleted_at", "is", null).groupBy("owner_user_id").execute(),
+    db.selectFrom("conversations").select((eb) => eb.fn.countAll<number>().as("count")).select("seller_user_id").where("seller_user_id", "in", ids).groupBy("seller_user_id").execute(),
+    db.selectFrom("conversations").innerJoin("conversation_messages", "conversation_messages.conversation_id", "conversations.id").select("conversations.seller_user_id").select(eb => eb.fn.count("conversations.id").distinct().as("count")).where("conversations.seller_user_id", "in", ids).whereRef("conversation_messages.sender_user_id", "=", "conversations.seller_user_id").groupBy("conversations.seller_user_id").execute(),
+    db.selectFrom("moderation_cases").select("target_id").select(eb => eb.fn.countAll().as("count")).where("target_type", "=", "user").where("target_id", "in", ids).where("priority", "=", "high").where("status", "in", ["open", "escalated"]).groupBy("target_id").execute()
   ]);
-  const phoneVerified = Boolean(user?.phone_verified_at);
-  const profileComplete = Boolean(profile?.first_name?.trim() && profile?.last_name?.trim() && profile?.display_name?.trim());
-  const identityVerified = identity?.status === "verified";
-  const storefrontVerified = storefront?.status === "active";
-  const accountAgeDays = user?.created_at ? Math.max(0, Math.floor((Date.now() - new Date(user.created_at).getTime()) / 86_400_000)) : 0;
-  const approvedListings = Number(listingCount?.count ?? 0);
-  const seriousViolationCount = await db.selectFrom("moderation_cases").select((eb) => eb.fn.countAll<number>().as("count")).where("target_type", "=", "user").where("target_id", "=", userId).where("priority", "=", "high").where("status", "in", ["open", "escalated"]).executeTakeFirst().then((row) => Number(row?.count ?? 0)).catch(() => 0);
-  const trustScore = Math.max(0, Math.min(100, (identityVerified ? 35 : 0) + (phoneVerified ? 20 : 0) + (profileComplete ? 10 : 0) + (storefrontVerified ? 15 : 0) + Math.min(15, Math.floor(accountAgeDays / 30)) + Math.min(5, approvedListings) - Math.min(25, seriousViolationCount * 25)));
-  const publicBadges = [
-    ...(accountAgeDays < 30 ? ["new_account"] : []),
-    ...(phoneVerified ? ["phone_verified"] : []),
-    ...(identityVerified ? ["identity_verified"] : []),
-    ...(approvedListings >= 3 ? ["experienced_seller"] : []),
-    ...(storefrontVerified ? ["verified_storefront"] : [])
-  ];
-  return {
-    phone_verified: phoneVerified,
-    profile_complete: profileComplete,
-    identity_verified: identityVerified,
-    identity_verified_at: identityVerified ? identity?.verified_at ?? null : null,
-    storefront_verified: storefrontVerified,
-    approved_listings: Number(listingCount?.count ?? 0),
-    seller_response_rate: Number(conversationCount?.count ?? 0) > 0 ? Math.round((respondedConversationCount.length / Number(conversationCount?.count ?? 1)) * 100) : null,
-    public_badges: publicBadges,
-    trust_tier: trustScore >= 70 ? "established" : trustScore >= 35 ? "active" : "new"
-  };
+  return new Map(users.map(user => {
+    const userId = user.id;
+    const profile = profiles.find(row => row.user_id === userId);
+    const identity = identities.find(row => row.user_id === userId);
+    const storefront = storefronts.find(row => row.owner_user_id === userId);
+    const listingCount = listings.find(row => row.owner_user_id === userId);
+    const conversationCount = conversations.find(row => row.seller_user_id === userId);
+    const respondedCount = Number(responses.find(row => row.seller_user_id === userId)?.count ?? 0);
+    const seriousViolationCount = Number(violations.find(row => row.target_id === userId)?.count ?? 0);
+      const phoneVerified = Boolean(user?.phone_verified_at);
+      const profileComplete = Boolean(profile?.first_name?.trim() && profile?.last_name?.trim() && profile?.display_name?.trim());
+      const identityVerified = identity?.status === "verified";
+      const storefrontVerified = storefront?.status === "active";
+      const accountAgeDays = user?.created_at ? Math.max(0, Math.floor((Date.now() - new Date(user.created_at).getTime()) / 86_400_000)) : 0;
+      const approvedListings = Number(listingCount?.count ?? 0);
+      const trustScore = Math.max(0, Math.min(100, (identityVerified ? 35 : 0) + (phoneVerified ? 20 : 0) + (profileComplete ? 10 : 0) + (storefrontVerified ? 15 : 0) + Math.min(15, Math.floor(accountAgeDays / 30)) + Math.min(5, approvedListings) - Math.min(25, seriousViolationCount * 25)));
+      const publicBadges = [
+        ...(accountAgeDays < 30 ? ["new_account"] : []),
+        ...(phoneVerified ? ["phone_verified"] : []),
+        ...(identityVerified ? ["identity_verified"] : []),
+        ...(approvedListings >= 3 ? ["experienced_seller"] : []),
+        ...(storefrontVerified ? ["verified_storefront"] : [])
+      ];
+      return [userId, {
+        phone_verified: phoneVerified,
+        profile_complete: profileComplete,
+        identity_verified: identityVerified,
+        identity_verified_at: identityVerified ? identity?.verified_at ?? null : null,
+        storefront_verified: storefrontVerified,
+        approved_listings: Number(listingCount?.count ?? 0),
+        seller_response_rate: Number(conversationCount?.count ?? 0) > 0 ? Math.round((respondedCount / Number(conversationCount?.count ?? 1)) * 100) : null,
+        public_badges: publicBadges,
+        trust_tier: trustScore >= 70 ? "established" : trustScore >= 35 ? "active" : "new"
+      }] as const;
+  }));
 }

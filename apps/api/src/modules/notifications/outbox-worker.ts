@@ -1,11 +1,12 @@
 import type { Kysely } from "kysely";
 import type { AppConfig } from "../../config.js";
 import type { Database } from "../../db/types.js";
-import { sendUserPushNotification } from "./push-delivery.js";
+import { reconcileNativePushReceipts, sendUserPushNotification } from "./push-delivery.js";
 import { listPendingNotifications, markNotificationProcessing, markNotificationRetry, markNotificationSent, recoverStuckNotifications } from "./repository.js";
 
 export async function processNotificationOutbox(db: Kysely<Database>, config: AppConfig, limit = 20) {
   const recovered = await recoverStuckNotifications(db);
+  await reconcileNativePushReceipts(db, config);
   const jobs = await listPendingNotifications(db, limit);
   let processed = 0;
   for (const job of jobs) {

@@ -1,5 +1,12 @@
 # Enterprise remediation — 2026-11-20
 
+## Trust, PDF and push receipts
+
+- Feed trust uses grouped queries across sellers. The database regression verifies distinct listing counts for two sellers.
+- Android can select and submit a PDF using the account form. Cache copies are removed after reading. Android bundle export and Pixel startup through Expo Go passed. PDF submission on-device still needs an authenticated test run.
+- Expo ticket IDs are persisted by migration 0031. The outbox worker checks delayed receipts, records provider results, expires missing receipts and revokes unregistered tokens. An isolated PostgreSQL test covers a delayed provider error. Real remote delivery still requires a development build with working FCM credentials and a test device token.
+- Dependency audit remains open. Attempts to upgrade Kysely and refresh Fastify/Vite did not change locked versions. The current lockfile adds SDK-compatible document picker and filesystem dependencies.
+
 ## November 21 follow-up
 
 - An unpublished listing is visible through its detail route to the owner and moderators or admins. Anonymous and unrelated users receive 404. Authorized preview responses are private and are not cached or counted as public views. The isolated PostgreSQL test covers these access boundaries.

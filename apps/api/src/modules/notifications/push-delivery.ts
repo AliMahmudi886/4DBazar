@@ -33,6 +33,37 @@ export interface PushDeliveryResult {
 
 export interface ExpoPushTicket { id?: string; status?: string; details?: { error?: string } }
 
+export async function reconcileNativePushReceipts(db: Kysely<Database>, config: AppConfig) {
+  const now = new Date();
+  await db.updateTable("native_push_receipts").set({ status: "expired" })
+    .where("status", "=", "pending").where("expires_at", "<=", now).execute();
+  const pending = await db.selectFrom("native_push_receipts").select(["ticket_id", "token_id"])
+    .where("status", "=", "pending").where("next_check_at", "<=", now)
+    .orderBy("next_check_at").limit(100).execute();
+  if (!pending.length) return;
+  const ids = pending.map(row => row.ticket_id);
+  await db.updateTable("native_push_receipts").set({ next_check_at: new Date(now.getTime() + 5 * 60_000) })
+    .where("status", "=", "pending").where("ticket_id", "in", ids).execute();
+  const response = await fetch(`${config.EXPO_PUSH_API_URL}/getReceipts`, {
+    method: "POST", signal: AbortSignal.timeout(10000),
+    headers: { "content-type": "application/json" }, body: JSON.stringify({ ids })
+  }).catch(() => null);
+  if (!response?.ok) return;
+  const result = await response.json().catch(() => null) as { data?: Record<string, ExpoPushTicket> } | null;
+  await db.transaction().execute(async trx => {
+    for (const row of pending) {
+      const receipt = result?.data?.[row.ticket_id];
+      if (receipt?.status !== "ok" && receipt?.status !== "error") continue;
+      const providerError = receipt.details?.error ?? null;
+      const updated = await trx.updateTable("native_push_receipts").set({
+        status: receipt.status === "ok" ? "accepted" : "error",
+        provider_error: typeof providerError === "string" ? providerError.slice(0, 120) : null
+      }).where("ticket_id", "=", row.ticket_id).where("status", "=", "pending").executeTakeFirst();
+      if (updated.numUpdatedRows && providerError === "DeviceNotRegistered") await revokeNativePushTokenById(trx, row.token_id);
+    }
+  });
+}
+
 export function parseExpoPushTickets(value: unknown): ExpoPushTicket[] {
   if (!value || typeof value !== "object" || !("data" in value) || !Array.isArray(value.data)) return [];
   return value.data.filter((item): item is ExpoPushTicket => Boolean(item && typeof item === "object"));
@@ -70,30 +101,20 @@ async function sendNativePushNotifications(db: Kysely<Database>, config: AppConf
   let sent = 0;
   let revoked = 0;
   let failed = 0;
-  const ticketIds: string[] = [];
+  const receiptRows: Array<{ ticket_id: string; token_id: string }> = [];
   await Promise.all(tokens.map(async (item, index) => {
     const ticket = tickets[index];
     if (ticket?.status === "ok") sent += 1;
-    if (ticket?.status === "ok" && ticket.id) ticketIds.push(ticket.id);
+    if (ticket?.status === "ok" && ticket.id) receiptRows.push({ ticket_id: ticket.id, token_id: item.id });
     if (ticket?.status !== "ok") failed += 1;
     if (ticket?.details?.error === "DeviceNotRegistered") { await revokeNativePushTokenById(db, item.id); revoked += 1; }
   }));
-  if (ticketIds.length) {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    try {
-      const receiptResponse = await fetch(`${config.EXPO_PUSH_API_URL}/getReceipts`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids: ticketIds }) });
-      if (receiptResponse.ok) {
-        const receipts = await receiptResponse.json() as { data?: Record<string, { status?: string; details?: { error?: string } }> };
-        for (const [ticketId, receipt] of Object.entries(receipts.data ?? {})) {
-          if (receipt.status === "error" && ticketIds.includes(ticketId)) { failed += 1; sent -= 1; }
-          if (receipt.details?.error === "DeviceNotRegistered") {
-            const index = tickets.findIndex((ticket) => ticket.id === ticketId);
-            const token = index >= 0 ? tokens[index] : undefined;
-            if (token) { await revokeNativePushTokenById(db, token.id); revoked += 1; }
-          }
-        }
-      }
-    } catch { /* receipt polling is best-effort */ }
+  if (receiptRows.length) {
+    const now = Date.now();
+    await db.insertInto("native_push_receipts").values(receiptRows.map(row => ({
+      ...row, status: "pending", provider_error: null,
+      next_check_at: new Date(now + 15 * 60_000), expires_at: new Date(now + 24 * 60 * 60_000)
+    }))).onConflict(conflict => conflict.column("ticket_id").doNothing()).execute();
   }
   return { attempted: tokens.length, sent, revoked, failed };
 }
