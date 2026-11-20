@@ -50,7 +50,7 @@ const API_BASE_URL =
     ? localApiBaseUrl
     : import.meta.env.MODE === "development"
       ? configuredApiBaseUrl
-      : configuredApiBaseUrl;
+      : configuredApiBaseUrl || "https://api.4dbazar.ir";
 const API_HEALTH_READY_PATH = API_BASE_URL ? "/health/ready" : "/api/health/ready";
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY ?? "";
 const DEV_USER_ID = "00000000-0000-4000-8000-000000000301";
@@ -1590,8 +1590,8 @@ function App() {
     (total, conversation) => total + (conversation.is_muted ? 0 : conversation.unread_count ?? 0),
     0
   );
-  const databaseReady = ready?.checks.database === "ok";
-  const smsReady = ready?.checks.sms === "configured";
+  const databaseReady = ready?.checks?.database === "ok";
+  const smsReady = ready?.checks?.sms === "configured";
   const approvedCount = items.filter((item) => item.status === "approved").length;
   const isModerator = currentUser?.roles.includes("moderator") ?? false;
   const isAdmin = currentUser?.roles.includes("admin") ?? false;
@@ -2505,12 +2505,12 @@ function App() {
             </span>
             <span
               className={smsReady ? "health-pill ok" : "health-pill warn"}
-              title={ready?.checks.sms_vendor ? `ارائه‌دهنده: ${ready.checks.sms_vendor} | مسیر: ${ready.checks.sms_transport ?? "نامشخص"}` : undefined}
+              title={ready?.checks?.sms_vendor ? `ارائه‌دهنده: ${ready.checks.sms_vendor} | مسیر: ${ready.checks.sms_transport ?? "نامشخص"}` : undefined}
             >
               <MessageCircle size={16} />
               کاوه‌نگار {smsReady
-                ? ready?.checks.sms_transport === "fixed_ip" ? "آماده با IP ثابت" : "تنظیم شده"
-                : ready?.checks.sms === "disabled" ? "غیرفعال" : "تنظیم ناقص"}
+                ? ready?.checks?.sms_transport === "fixed_ip" ? "آماده با IP ثابت" : "تنظیم شده"
+                : ready?.checks?.sms === "disabled" ? "غیرفعال" : "تنظیم ناقص"}
             </span>
             <span className={authToken ? "health-pill ok" : "health-pill warn"}>
               <ShieldCheck size={16} />

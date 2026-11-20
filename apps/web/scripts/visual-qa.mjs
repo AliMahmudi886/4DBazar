@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
 import { access, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright";
 
-const baseUrl = process.env.VISUAL_QA_URL ?? "http://127.0.0.1:4173";
+const baseUrl = process.env.VISUAL_QA_URL ?? `http://127.0.0.1:${process.env.VISUAL_QA_PORT ?? "4173"}`;
 const screenshotDir = path.resolve(process.cwd(), "../../qa/screenshots");
 const managedServer = process.env.VISUAL_QA_URL ? null : await startPreviewServer(baseUrl);
 
@@ -24,6 +25,11 @@ const failures = [];
 try {
   for (const viewport of viewports) {
     const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height } });
+    const pageErrors = [];
+    page.on("pageerror", error => pageErrors.push(error.message));
+    // Visual fixtures must not depend on availability or data of a live API.
+    await page.route("**/api/**", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: [] }) }));
+    await page.route("**/health/**", route => route.fulfill({ contentType: "application/json", body: JSON.stringify({ status: "ok" }) }));
     if (viewport.section === "listing") await mockListingDetailApi(page);
     const targetUrl = viewport.section === "admin"
       ? new URL("/admin", baseUrl).toString()
@@ -48,6 +54,9 @@ try {
     }
 
     if (viewport.section === "listing") {
+      await page.locator(".listing-detail-main-media img").waitFor({ timeout: 10000 }).catch(async () => {
+        throw new Error(`${viewport.name}: fixture detail did not render: ${pageErrors.join("; ")} ${(await page.locator("body").innerText()).slice(0, 1500)}`);
+      });
       const mediaSize = await page.locator(".listing-detail-main-media img").evaluate((image) => ({
         width: image.getBoundingClientRect().width,
         height: image.getBoundingClientRect().height
@@ -70,6 +79,7 @@ try {
       path: path.join(screenshotDir, `${viewport.name}.png`),
       fullPage: true
     });
+    failures.push(...pageErrors.map(error => `${viewport.name}: ${error}`));
 
     await page.close();
   }
@@ -152,8 +162,13 @@ async function launchBrowser() {
 }
 
 async function startPreviewServer(url) {
-  const server = spawn("npm", ["run", "preview", "--", "--port", new URL(url).port], {
-    shell: true,
+  let occupied = false;
+  try { await fetch(url); occupied = true; } catch { /* Port is not serving HTTP. */ }
+  if (occupied) throw new Error(`QA port is already in use: ${url}. Choose VISUAL_QA_PORT or stop the old QA server.`);
+  const require = createRequire(import.meta.url);
+  const vite = path.join(path.dirname(require.resolve("vite/package.json")), "bin", "vite.js");
+  const server = spawn(process.execPath, [vite, "preview", "--host", "127.0.0.1", "--strictPort", "--port", new URL(url).port], {
+    shell: false,
     stdio: "ignore",
     windowsHide: true
   });

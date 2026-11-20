@@ -20,6 +20,8 @@ Remaining findings are not waived. This increment is a source handoff, not a pro
 
 ### Dependency review
 
+Clean CI visual execution exposed a missing production API default when local env files are absent. Restored the hosted API fallback, made readiness display tolerate missing checks without blanking the page, and isolated all visual API fixtures. Visual harness now starts/stops Vite directly, rejects an occupied QA port and reports browser exceptions. The no-env export passed all six visual cases on its own port after these corrections; the partial health fixture also covers the missing-checks regression.
+
 GitHub CI caught a build-mode mismatch: global NODE_ENV=test retained development output and exceeded the unchanged bundle budget. The web build now explicitly starts Vite with NODE_ENV=production, regardless of the caller's environment. The isolated production rebuild is approximately 365 KiB total JS (largest chunk 269 KiB); CI build also declares production mode. Initial CI passed all 76 tests and fresh migrations before this bundle failure; the correction is tracked in a follow-up commit.
 
 Final verification after dependency resolution: all 76 tests passed without skips, workspace check/build, mobile typecheck, bundle budget, six visual cases and cross-browser quality passed. A separate 388-file source export completed a clean `npm ci --ignore-scripts`, then independently passed build/check, mobile typecheck and all 76 tests against the isolated database. The export has no parent commits, environment secrets, private keys, customer data or QA screenshots. GitHub CI execution is distinct from these local results.
