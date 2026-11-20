@@ -1,5 +1,12 @@
 # Enterprise remediation — 2026-11-20
 
+## November 21 follow-up
+
+- An unpublished listing is visible through its detail route to the owner and moderators or admins. Anonymous and unrelated users receive 404. Authorized preview responses are private and are not cached or counted as public views. The isolated PostgreSQL test covers these access boundaries.
+- Listing detail now limits related results in SQL. Feed trust lookups are reused per seller within each response. Query batching across distinct sellers remains open.
+- Mobile account settings can submit a photo of a national card, birth certificate, or passport for manual review. PDF selection, Android runtime verification, durable push receipt processing, and live device delivery remain open.
+- Automatic dependency remediation failed on incompatible Expo peers. Package manifests and the lockfile were preserved. The 42 advisories from the previous audit are still open.
+
 ## Follow-up
 
 - OTP verification and session creation now commit together. Failed attempts still commit their counters. The isolated database suite checks rollback of the code and session.

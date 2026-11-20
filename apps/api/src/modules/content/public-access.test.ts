@@ -4,6 +4,8 @@ import test from "node:test";
 import { createDatabase } from "../../db/database.js";
 import { ensureVerifiedUser } from "../auth/repository.js";
 import { assertPublicContent } from "./public-access.js";
+import { buildFixtureServer } from "../../testing/fixture-server.js";
+import { loadConfig } from "../../config.js";
 import { addFavorite, listUserFavoriteIds, removeFavorite } from "./favorites.js";
 
 test("isolated PostgreSQL: publication boundaries and idempotent favorites", { skip: !process.env.FOURD_TEST_DATABASE_URL }, async () => {
@@ -11,6 +13,7 @@ test("isolated PostgreSQL: publication boundaries and idempotent favorites", { s
   assert.ok(["localhost", "127.0.0.1"].includes(url.hostname));
   assert.equal(url.pathname, "/fourd_audit");
   const db = createDatabase(url.toString());
+  const app = buildFixtureServer(loadConfig({ NODE_ENV: "test", DATABASE_URL: url.toString() }));
   try {
     const owner = await ensureVerifiedUser(db, `audit-${Date.now()}`);
     const category = crypto.randomUUID();
@@ -18,6 +21,14 @@ test("isolated PostgreSQL: publication boundaries and idempotent favorites", { s
     const id = crypto.randomUUID();
     await db.insertInto("market_contents").values({ id, owner_user_id: owner.id, category_id: category, city_id: "00000000-0000-4000-8000-000000000101", content_type: "listing", title: "Fixture", description: "Fixture", status: "submitted", created_at: new Date(), updated_at: new Date(), deleted_at: null, expires_at: null, published_at: null, search_text: "fixture" }).execute();
     await assert.rejects(assertPublicContent(db, id));
+    const detailUrl = `/api/v1/contents/${id}`;
+    assert.equal((await app.inject({ url: detailUrl })).statusCode, 404);
+    assert.equal((await app.inject({ url: detailUrl, headers: { "x-4d-user-id": crypto.randomUUID() } })).statusCode, 404);
+    const preview = await app.inject({ url: detailUrl, headers: { "x-4d-user-id": owner.id } });
+    assert.equal(preview.statusCode, 200);
+    assert.equal(preview.headers["cache-control"], "private, no-store");
+    assert.equal(preview.json().data.id, id);
+    assert.equal((await app.inject({ url: detailUrl, headers: { "x-4d-user-id": crypto.randomUUID(), "x-4d-roles": "moderator" } })).statusCode, 200);
     await db.updateTable("market_contents").set({ status: "approved" }).where("id", "=", id).execute();
     await assertPublicContent(db, id);
     await Promise.all(Array.from({ length: 8 }, () => addFavorite(db, owner.id, id)));
@@ -29,5 +40,5 @@ test("isolated PostgreSQL: publication boundaries and idempotent favorites", { s
     await db.updateTable("market_contents").set({ deleted_at: null, expires_at: new Date(0) }).where("id", "=", id).execute();
     await assert.rejects(assertPublicContent(db, id));
     await assert.rejects(assertPublicContent(db, "invalid-id"));
-  } finally { await db.destroy(); }
+  } finally { await app.close(); await db.destroy(); }
 });

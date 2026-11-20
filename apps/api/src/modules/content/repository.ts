@@ -334,9 +334,7 @@ export async function getContentDetail(db: Kysely<Database>, contentId: string) 
     .where("target_type", "=", "listing")
     .where("target_id", "=", contentId)
     .executeTakeFirst();
-  const related = (await listFeedContents(db))
-    .filter((item) => item.id !== contentId && (item.category_id === content.category_id || item.city_id === content.city_id))
-    .slice(0, 3);
+  const related = await listFeedContents(db, { exclude: contentId, category: content.category_id, city: content.city_id });
   return { ...content, media: media.get(contentId) ?? [], view_count: Number(views?.count ?? 0), seller_trust: await getPublicTrustSummary(db, content.owner_user_id).catch(() => null), related };
 }
 
@@ -377,8 +375,8 @@ export async function listUserContents(db: Kysely<Database>, ownerUserId: string
   return Promise.all(rows.map(async (row) => ({ ...row, media: media.get(row.id) ?? [], seller_trust: await getPublicTrustSummary(db, row.owner_user_id).catch(() => null) })));
 }
 
-export async function listFeedContents(db: Kysely<Database>) {
-  const rows = await db
+export async function listFeedContents(db: Kysely<Database>, related?: { exclude: string; category: string; city: string }) {
+  let query = db
     .selectFrom("market_contents")
     .leftJoin("listings", "listings.content_id", "market_contents.id")
     .leftJoin("storefronts", "storefronts.id", "market_contents.storefront_id")
@@ -408,12 +406,15 @@ export async function listFeedContents(db: Kysely<Database>) {
     .where("market_contents.deleted_at", "is", null)
     .where("market_contents.status", "=", PUBLIC_FEED_STATUS)
     .where((eb) => eb.or([eb("market_contents.expires_at", "is", null), eb("market_contents.expires_at", ">", new Date())]))
-    .orderBy("market_contents.created_at", "desc")
-    .limit(50)
-    .execute();
+    .orderBy("market_contents.created_at", "desc");
+  if (related) query = query.where("market_contents.id", "!=", related.exclude)
+    .where((eb) => eb.or([eb("market_contents.category_id", "=", related.category), eb("market_contents.city_id", "=", related.city)]));
+  const rows = await query.limit(related ? 3 : 50).execute();
   const media = await listMediaForContents(db, rows.map((row) => row.id));
   const viewCounts = await listViewCounts(db, rows.map((row) => row.id));
-  return Promise.all(rows.map(async (row) => ({ ...row, media: media.get(row.id) ?? [], view_count: viewCounts.get(row.id) ?? 0, seller_trust: await getPublicTrustSummary(db, row.owner_user_id).catch(() => null) })));
+  const trust = new Map(await Promise.all([...new Set(rows.map(row => row.owner_user_id))]
+    .map(async id => [id, await getPublicTrustSummary(db, id).catch(() => null)] as const)));
+  return rows.map(row => ({ ...row, media: media.get(row.id) ?? [], view_count: viewCounts.get(row.id) ?? 0, seller_trust: trust.get(row.owner_user_id) ?? null }));
 }
 
 async function listViewCounts(db: Kysely<Database>, contentIds: string[]) {

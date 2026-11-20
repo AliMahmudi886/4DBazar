@@ -1082,8 +1082,23 @@ export function buildServer(config: AppConfig, options: { testHeaderAuth?: boole
     catch (error) { if (error instanceof Error && error.message === "transport_not_owned_or_inactive") throw new AppError("forbidden", "این سفر متعلق به شما نیست یا قبلاً بسته شده است.", 403); throw error; }
   });
 
-  app.get<{ Params: { contentId: string } }>("/api/v1/contents/:contentId", async (request) => {
-    await assertPublicContent(db, request.params.contentId);
+  app.get<{ Params: { contentId: string } }>("/api/v1/contents/:contentId", async (request, reply) => {
+    try {
+      await assertPublicContent(db, request.params.contentId);
+    } catch (error) {
+      const { contentId } = request.params;
+      if (!(error instanceof AppError) || error.code !== "not_found" || !request.user ||
+          !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(contentId)) throw error;
+      const user = request.user;
+      let preview = db.selectFrom("market_contents").select("id")
+        .where("id", "=", contentId).where("deleted_at", "is", null);
+      if (!user.roles.some((role) => role === "admin" || role === "moderator")) {
+        preview = preview.where("owner_user_id", "=", user.id);
+      }
+      if (!await preview.executeTakeFirst()) throw error;
+      reply.header("cache-control", "private, no-store");
+      return { data: await getContentDetail(db, contentId) };
+    }
     const content = { id: request.params.contentId };
     const viewerHash = createHash("sha256").update(`${request.ip}|${config.SESSION_SECRET}`).digest("hex");
     await recordListingView(db, { contentId: content.id, ...(request.user?.id ? { actorUserId: request.user.id } : {}), viewerHash }).catch(() => undefined);

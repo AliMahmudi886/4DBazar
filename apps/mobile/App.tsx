@@ -2845,6 +2845,9 @@ function ProfileScreenV6({
               <Text style={styles.accountStatusText}>{me?.identity_verification_status === "verified" ? "هویت تأیید شده" : me?.identity_verification_status === "pending" ? "در انتظار بررسی" : "تأیید نشده"}</Text>
             </View>
           </View>
+          {me?.mobile_verified && me.identity_verification_status !== "verified" && me.identity_verification_status !== "pending" ? (
+            <IdentityDocumentForm token={token} onSubmitted={() => setMe(current => current ? { ...current, identity_verification_status: "pending" } : current)} />
+          ) : null}
           <View style={styles.profileFormCard}>
             <Text style={styles.cardTitle}>اطلاعات شخصی</Text>
             <Text style={styles.subtitle}>این اطلاعات برای اعتماد بیشتر و مدیریت آگهی‌ها استفاده می‌شود.</Text>
@@ -3675,6 +3678,69 @@ function ChatScreenV3({
         </Pressable>
       </View>
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+    </View>
+  );
+}
+
+function IdentityDocumentForm({ token, onSubmitted }: { token: string; onSubmitted: () => void }) {
+  const [kind, setKind] = useState("national_card");
+  const [photo, setPhoto] = useState<string>();
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const kinds = [["national_card", "کارت ملی"], ["birth_certificate", "شناسنامه"], ["passport", "گذرنامه"]] as const;
+
+  async function choosePhoto() {
+    setMessage("");
+    setPhoto(undefined);
+    try {
+      const selection = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], base64: true, quality: 0.8 });
+      if (selection.canceled) return;
+      const base64 = selection.assets[0]?.base64;
+      if (!base64 || base64.length > Math.floor(5_000_000 * 4 / 3)) {
+        setMessage("تصویر خوانا با حجم کمتر از ۵ مگابایت انتخاب کنید.");
+        return;
+      }
+      setPhoto(base64);
+    } catch {
+      setMessage("باز کردن تصاویر ممکن نشد.");
+    }
+  }
+
+  async function submit() {
+    if (!photo || busy) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      await api("/api/v1/me/identity-verification", {
+        method: "POST",
+        body: JSON.stringify({ document_type: kind, document_data_url: `data:image/jpeg;base64,${photo}` })
+      }, token);
+      setPhoto(undefined);
+      onSubmitted();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "ارسال مدرک انجام نشد.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <View style={styles.profileFormCard}>
+      <Text style={styles.cardTitle}>ارسال مدرک برای احراز هویت</Text>
+      <Text style={styles.subtitle}>تصویر فقط برای بررسی ادمین ارسال می‌شود.</Text>
+      {kinds.map(([value, label]) => (
+        <Pressable key={value} style={[styles.secondary, kind === value && styles.tabActive]} disabled={busy}
+          accessibilityRole="button" accessibilityState={{ selected: kind === value }} onPress={() => setKind(value)}>
+          <Text>{label}</Text>
+        </Pressable>
+      ))}
+      <Pressable style={styles.secondary} disabled={busy} onPress={() => void choosePhoto()}>
+        <Text>{photo ? "تغییر تصویر انتخاب‌شده" : "انتخاب تصویر مدرک"}</Text>
+      </Pressable>
+      {photo ? <Pressable style={styles.secondary} disabled={busy} onPress={() => void submit()}>
+        <Text>{busy ? "در حال ارسال…" : "ارسال برای بررسی"}</Text>
+      </Pressable> : null}
+      {message ? <Text accessibilityLiveRegion="polite">{message}</Text> : null}
     </View>
   );
 }
