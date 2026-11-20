@@ -1,5 +1,11 @@
 # Enterprise remediation — 2026-11-20
 
+## AJV, Sucrase and Android validation
+
+- The Expo dev launcher resolves AJV 8.20.0 and Expo config resolves Sucrase 3.35.1. Neither package is listed in the new lockfile audit. The audit feed now reports 1 high and 27 moderate entries overall. An Expo/Metro upgrade remains open.
+- An isolated account was prepared for the Pixel PDF check. Execution policy rejected starting Metro with the isolated API URL, so the device login and upload were not run.
+- To test remote Android push, register package `ir.fourd.market` in Firebase, use its `google-services.json` via `expo.android.googleServicesFile`, and configure the matching project's FCM v1 service account in EAS Android credentials. Keep the service account key outside Git. Install an EAS development APK on a Pixel or emulator with Google Play services, grant notification permission, and register its Expo push token using the EAS project ID. Send a synthetic message, observe it on-device, and verify both the ticket and receipt. Use the isolated API if testing the app's outbox and receipt worker.
+
 ## Additional dependency remediation
 
 - Migrated API configuration validation to Zod 4.6.7. Updated compatible transitive packages and scoped overrides to the needed dependency branches. Audit now reports 1 high and 20 moderate issues. The high issue remains in Metro's image-size dependency. Expo-related advisories also remain open.

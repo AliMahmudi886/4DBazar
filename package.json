@@ -64,7 +64,11 @@
     },
     "plist": {
       "@xmldom/xmldom": "0.9.12"
-    }
+    },
+    "expo-dev-launcher": {
+      "ajv": "8.20.0"
+    },
+    "sucrase": "3.35.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
