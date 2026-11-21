@@ -1738,6 +1738,7 @@ function App() {
     try {
       if (!authToken) throw new Error("نشست ورود منقضی شده است. دوباره وارد شو.");
       const cityId = profileForm.primary_city_id || cities[0]?.id || "";
+      const requestedPasswordChange = profileForm.password.length > 0;
       if (!cityId || !cities.some((city) => city.id === cityId)) throw new Error("شهر معتبر انتخاب کن و دوباره تلاش کن.");
       const response = await fetch(`${API_BASE_URL}/api/v1/me/profile`, {
         method: "PUT",
@@ -1749,10 +1750,13 @@ function App() {
           ...(profileForm.password ? { password: profileForm.password } : {})
         })
       });
-      const body = await response.json().catch(() => null) as { error?: { message?: string } } | null;
+      const body = await response.json().catch(() => null) as { data?: { password_set?: boolean }; error?: { message?: string } } | null;
       if (!response.ok) throw new Error(body?.error?.message || `ذخیره پروفایل انجام نشد (${response.status}).`);
+      if (requestedPasswordChange && body?.data?.password_set !== true) {
+        throw new Error("اطلاعات حساب ذخیره شد، اما سرور ذخیرهٔ رمز را تأیید نکرد.");
+      }
       setProfileForm((current) => ({ ...current, password: "" }));
-      setNotice("پروفایل و احراز هویت سبک کامل شد. حالا ثبت آگهی فعال است.");
+      setNotice(requestedPasswordChange ? "رمز عبور ذخیره شد. اکنون می‌توانی با شماره موبایل و همین رمز وارد شوی." : "اطلاعات پروفایل ذخیره شد.");
       await refreshData();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "ذخیره پروفایل انجام نشد. اطلاعات را بررسی کن.");
