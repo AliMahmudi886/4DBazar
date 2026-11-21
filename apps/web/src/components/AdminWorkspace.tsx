@@ -183,7 +183,7 @@ export default function AdminWorkspace({
       </div>
 
       {isAdmin ? <details className="admin-disclosure" open>
-        <summary><span><ShieldCheck size={17} /> احراز هویت دستی</span><small>{adminIdentityVerifications.length.toLocaleString("fa-IR")} درخواست در انتظار</small><span className="disclosure-arrow" aria-hidden="true">+</span></summary>
+        <summary><span><ShieldCheck size={17} /> احراز هویت دستی</span><small>{adminIdentityVerifications.filter((request) => request.status === "pending").length.toLocaleString("fa-IR")} درخواست در انتظار</small><span className="disclosure-arrow" aria-hidden="true">+</span></summary>
         <div className="admin-disclosure-body">
           <div className="queue-title"><strong>مدارک کاربران برای بررسی</strong><button type="button" className="ghost-button compact-action" onClick={() => void refreshAdminIdentityVerifications()}><RefreshCw size={15} /> تازه‌سازی</button></div>
           {adminIdentityVerifications.length ? <div className="case-grid">{adminIdentityVerifications.map((request: any) => <IdentityVerificationCard key={request.id} request={request} busy={moderationBusyId === request.id} getDocument={getAdminIdentityDocument} decide={decideAdminIdentityVerification} />)}</div> : <div className="empty-state compact"><ShieldCheck size={24} /><h2>درخواست احراز هویت نداریم</h2><p>درخواست‌های ثبت‌شده کاربران پس از ارسال اینجا نمایش داده می‌شوند.</p></div>}
