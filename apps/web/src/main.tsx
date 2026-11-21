@@ -1466,6 +1466,8 @@ function App() {
         })
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload = (await response.json()) as { data: { status: string } };
+      setAdminUserContents((current) => current.map((item) => item.id === contentId ? { ...item, status: payload.data.status } : item));
       setNotice(decision === "approve" ? "آگهی تایید و منتشر شد." : "آگهی رد شد و از انتشار خارج ماند.");
       await refreshPendingContents();
       await refreshData();

@@ -382,7 +382,7 @@ function priorityLabel(priority?: string | null) {
 }
 
 function storefrontStatusLabel(status?: string | null) {
-  return ({ submitted: "در انتظار بررسی", approved: "فعال", suspended: "متوقف‌شده", archived: "بایگانی‌شده" } as Record<string, string>)[status ?? ""] ?? status ?? "ثبت نشده";
+  return ({ pending_review: "در انتظار بررسی", active: "فعال", suspended: "متوقف‌شده", archived: "بایگانی‌شده" } as Record<string, string>)[status ?? ""] ?? status ?? "ثبت نشده";
 }
 
 function SupportRow({ ticket, busy, onReply }: { ticket: any; busy: boolean; onReply: (id: string, reply: string) => void | Promise<void> }) {

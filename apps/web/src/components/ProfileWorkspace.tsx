@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Ban, Bell, BellOff, ClipboardList, Headphones, MessageCircle, Plus, Puzzle, RefreshCw, Send, ShieldCheck, Store, UserRound, Wifi, X } from "lucide-react";
 import IdentityBadge from "./IdentityBadge.js";
+import { sitePath } from "../sitePath.js";
 
 interface WorkspaceProps {
   cities: Array<{ id: string; name_fa: string }>;
@@ -347,7 +348,7 @@ export default function ProfileWorkspace(props: WorkspaceProps) {
                   <h2>{props.myStorefront.name}</h2>
                   <p>{props.myStorefront.short_description || "توضیح کوتاه غرفه هنوز ثبت نشده است."}</p>
                   <div className="storefront-actions">
-                    <a className="ghost-button" href={`/storefront/${props.myStorefront.slug}`} target="_blank" rel="noreferrer"><Store size={16} /> مشاهده غرفه</a>
+                    <a className="ghost-button" href={sitePath(`/storefront/${props.myStorefront.slug}`)} target="_blank" rel="noreferrer"><Store size={16} /> مشاهده غرفه</a>
                     <button type="button" className="ghost-button" onClick={() => setEditingStorefront(true)}><RefreshCw size={16} /> ویرایش غرفه</button>
                   </div>
                 </div>
