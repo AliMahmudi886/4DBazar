@@ -23,7 +23,7 @@ const configSchema = z
     ADMIN_PHONE_NUMBERS: z.string().default(""),
     MEDIA_STORAGE_DIR: z.string().min(1).default("data/media"),
     MEDIA_PUBLIC_PATH: z.string().min(1).default("/media"),
-    MEDIA_STORAGE_PROVIDER: z.enum(["local", "s3"]).default("local"),
+    MEDIA_STORAGE_PROVIDER: z.enum(["local", "s3", "disabled"]).default("local"),
     MEDIA_S3_BUCKET: z.string().optional(),
     MEDIA_S3_REGION: z.string().default("us-east-1"),
     MEDIA_S3_ENDPOINT: z.string().optional(),

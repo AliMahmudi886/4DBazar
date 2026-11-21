@@ -123,7 +123,9 @@ export function buildServer(config: AppConfig, options: { testHeaderAuth?: boole
   const db = createDatabase(config.DATABASE_URL);
   const mediaStore = config.MEDIA_STORAGE_PROVIDER === "s3"
     ? createS3MediaStore({ bucket: config.MEDIA_S3_BUCKET!, region: config.MEDIA_S3_REGION, ...(config.MEDIA_S3_ENDPOINT ? { endpoint: config.MEDIA_S3_ENDPOINT } : {}), accessKeyId: config.MEDIA_S3_ACCESS_KEY_ID!, secretAccessKey: config.MEDIA_S3_SECRET_ACCESS_KEY!, publicBaseUrl: config.MEDIA_S3_PUBLIC_BASE_URL! })
-    : createLocalMediaStore({ storageDir: config.MEDIA_STORAGE_DIR, publicPath: config.MEDIA_PUBLIC_PATH });
+    : config.MEDIA_STORAGE_PROVIDER === "local"
+      ? createLocalMediaStore({ storageDir: config.MEDIA_STORAGE_DIR, publicPath: config.MEDIA_PUBLIC_PATH })
+      : null;
   const captcha = createCaptchaProofService(config.SESSION_SECRET);
   const otpRequestFallbacks = new Map<string, { count: number; resetAt: number }>();
   const passwordLoginFailures = new Map<string, { count: number; resetAt: number }>();
@@ -849,6 +851,7 @@ export function buildServer(config: AppConfig, options: { testHeaderAuth?: boole
       });
     }
 
+    if (!mediaStore) throw new AppError("service_unavailable", "آپلود رسانهٔ آگهی فعلاً غیرفعال است.", 503);
     const result = await mediaStore.saveListingMedia({
       dataUrl,
       ownerUserId: request.user!.id
@@ -870,6 +873,7 @@ export function buildServer(config: AppConfig, options: { testHeaderAuth?: boole
   });
 
   app.get<{ Params: { "*": string } }>(`${config.MEDIA_PUBLIC_PATH}/*`, async (request, reply) => {
+    if (!mediaStore) throw new AppError("not_found", "رسانه پیدا نشد.", 404);
     const asset = await mediaStore.readPublicAsset(request.params["*"]);
     reply.header("cache-control", "public, max-age=31536000, immutable");
     reply.type(asset.mime_type).send(asset.body);
