@@ -1,3 +1,4 @@
+import { sitePath, sitePathname } from "./sitePath.js";
 import {
   AlertCircle,
   ArrowLeft,
@@ -655,8 +656,8 @@ function App() {
   const [storefrontForm, setStorefrontForm] = useState(initialStorefrontForm);
   const [storefrontSaving, setStorefrontSaving] = useState(false);
   const [publicStorefront, setPublicStorefront] = useState<{ storefront: Storefront; listings: MarketItem[] } | null>(null);
-  const storefrontSlug = window.location.pathname.match(/^\/storefront\/([^/]+)/)?.[1] ?? "";
-  const listingSlug = window.location.pathname.match(/^\/listing\/([^/]+)/)?.[1] ?? "";
+  const storefrontSlug = sitePathname().match(/^\/storefront\/([^/]+)/)?.[1] ?? "";
+  const listingSlug = sitePathname().match(/^\/listing\/([^/]+)/)?.[1] ?? "";
   const [analyticsSummary, setAnalyticsSummary] = useState<AnalyticsSummary>({ totals: { views: 0, favorites: 0, contacts: 0 }, listings: [] });
   const [analyticsConsent, setAnalyticsConsent] = useState(true);
   const [analyticsBusy, setAnalyticsBusy] = useState(false);
@@ -902,7 +903,7 @@ function App() {
 
   function navigateWorkspace(workspace: Workspace) {
     setActiveWorkspace(workspace);
-    const nextPath = workspace === "admin" ? "/admin" : workspace === "profile" ? "/profile" : "/";
+    const nextPath = sitePath(workspace === "admin" ? "/admin" : workspace === "profile" ? "/profile" : "/");
     if (window.location.pathname !== nextPath) {
       window.history.pushState({}, "", nextPath);
     }
@@ -1193,7 +1194,7 @@ function App() {
       navigateWorkspace("profile");
       return;
     }
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    if (import.meta.env.BASE_URL !== "/" || !("serviceWorker" in navigator) || !("PushManager" in window)) {
       setNotice("این مرورگر Push واقعی را پشتیبانی نمی‌کند؛ اعلان داخل برنامه همچنان فعال است.");
       return;
     }
@@ -1216,7 +1217,7 @@ function App() {
         return;
       }
 
-      const registration = await navigator.serviceWorker.register("/service-worker.js");
+      const registration = await navigator.serviceWorker.register(sitePath("/service-worker.js"));
       const existing = await registration.pushManager.getSubscription();
       const subscription =
         existing ??
@@ -2372,14 +2373,14 @@ function App() {
       <a className="skip-link" href="#listing-page-main">رفتن به محتوای اصلی</a>
       <main id="listing-page-main" className="app-shell listing-route-shell" tabIndex={-1}>
         <header className="topbar listing-route-topbar">
-          <a className="listing-route-brand" href="/" aria-label="بازار محلی 4D">
-            <img className="listing-route-logo" src="/brand/4d-logo-horizontal.png" alt="4D" />
+          <a className="listing-route-brand" href={sitePath("/")} aria-label="بازار محلی 4D">
+            <img className="listing-route-logo" src={sitePath("/brand/4d-logo-horizontal.png")} alt="4D" />
             <span><strong>بازار محلی 4D</strong><small>جزئیات آگهی</small></span>
           </a>
           <nav className="listing-route-context" aria-label="مسیر صفحه">
-            <a href="/">بازار</a><span aria-hidden="true">/</span><strong>جزئیات آگهی</strong>
+            <a href={sitePath("/")}>بازار</a><span aria-hidden="true">/</span><strong>جزئیات آگهی</strong>
           </nav>
-          <a className="listing-route-back" href="/" aria-label="بازگشت به بازار"><ArrowLeft size={16} /> بازار</a>
+          <a className="listing-route-back" href={sitePath("/")} aria-label="بازگشت به بازار"><ArrowLeft size={16} /> بازار</a>
         </header>
         <React.Suspense fallback={<section className="listing-page-state"><Sparkles size={28} /><h1>در حال آماده‌سازی صفحه</h1></section>}>
           <ListingDetailPage id={listingSlug} apiBaseUrl={API_BASE_URL} cities={cities} categories={categories} mediaUrl={mediaUrl} formatPrice={formatPrice} authToken={authToken} isFavorite={favoriteIds.includes(listingSlug)} onToggleFavorite={() => void toggleFavorite({ id: listingSlug })} onStartContact={(listing) => void startContact(listing)} />
@@ -2394,8 +2395,8 @@ function App() {
     <main id="main-content" className="app-shell" tabIndex={-1}>
       <header className="topbar">
         <div className="brand-block">
-          <a className="brand-logo" href="/" aria-label="بازار محلی 4D">
-            <img src="/brand/4d-logo-horizontal.png" alt="4D چهار ده" />
+          <a className="brand-logo" href={sitePath("/")} aria-label="بازار محلی 4D">
+            <img src={sitePath("/brand/4d-logo-horizontal.png")} alt="4D چهار ده" />
           </a>
           <div>
             <strong>بازار محلی 4D</strong>
@@ -2671,7 +2672,7 @@ function App() {
               <button type="button" className="ghost-button compact-action" onClick={() => setTransportResults([])}>پاک‌کردن</button>
             </div>
             <div className="transport-results transport-results-feed">
-              {transportResults.map((route) => <a className="transport-result" href={`/listing/${route.id}`} key={route.id}>
+              {transportResults.map((route) => <a className="transport-result" href={sitePath(`/listing/${route.id}`)} key={route.id}>
                 <div><strong>{route.title}</strong><span>{route.origin_label} ← {route.destination_label}</span></div>
                 <small>{route.departure_date} · {route.time_from}{route.time_to ? ` تا ${route.time_to}` : ""}</small>
                 <b>{route.price_type === "fixed" ? formatPrice(route.price_amount, route.price_type) : "توافقی"}</b>
@@ -2701,16 +2702,16 @@ function App() {
                   style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
                   role="link"
                   tabIndex={0}
-                  onClick={(event) => { if ((event.target as HTMLElement).closest("button, a")) return; window.location.href = `/listing/${item.id}`; }}
-                  onKeyDown={(event) => { if ((event.key === "Enter" || event.key === " ") && !(event.target as HTMLElement).closest("button, a")) { event.preventDefault(); window.location.href = `/listing/${item.id}`; } }}
+                  onClick={(event) => { if ((event.target as HTMLElement).closest("button, a")) return; window.location.href = sitePath(`/listing/${item.id}`); }}
+                  onKeyDown={(event) => { if ((event.key === "Enter" || event.key === " ") && !(event.target as HTMLElement).closest("button, a")) { event.preventDefault(); window.location.href = sitePath(`/listing/${item.id}`); } }}
                 >
                   <div className="media-tile">
-                    {getItemMedia(item)[0] ? <a className="listing-card-media-link" href={`/listing/${item.id}`} aria-label={`صفحه جزئیات ${item.title}`} onClick={(event) => event.stopPropagation()}><img src={mediaUrl(getItemMedia(item)[0])} alt={item.title} loading="lazy" decoding="async" /></a> : <Sparkles size={24} />}
+                    {getItemMedia(item)[0] ? <a className="listing-card-media-link" href={sitePath(`/listing/${item.id}`)} aria-label={`صفحه جزئیات ${item.title}`} onClick={(event) => event.stopPropagation()}><img src={mediaUrl(getItemMedia(item)[0])} alt={item.title} loading="lazy" decoding="async" /></a> : <Sparkles size={24} />}
                     {getItemMedia(item).length > 1 ? <span className="media-count-badge">{getItemMedia(item).length.toLocaleString("fa-IR")} عکس</span> : null}
                   </div>
                   <div className="card-body">
                     <div className="card-title-row">
-                      <a className="listing-card-title-link" href={`/listing/${item.id}`} onClick={(event) => event.stopPropagation()}>{item.title}</a>
+                      <a className="listing-card-title-link" href={sitePath(`/listing/${item.id}`)} onClick={(event) => event.stopPropagation()}>{item.title}</a>
                       <button
                         type="button"
                         className={favoriteIds.includes(item.id) ? "mini-icon favorite-active" : "mini-icon"}
@@ -2727,7 +2728,7 @@ function App() {
                     <div className="meta-row">
                       <span>{cities.find((city) => city.id === item.city_id)?.name_fa ?? "4D"}</span>
                       <span>{categories.find((category) => category.id === item.category_id)?.name_fa ?? "دسته"}</span>
-                      {item.storefront_slug ? <a className="storefront-link-chip" href={`/storefront/${item.storefront_slug}`} onClick={(event) => event.stopPropagation()}><Store size={13} /> غرفه {item.storefront_name ?? "فروشنده"}</a> : null}
+                      {item.storefront_slug ? <a className="storefront-link-chip" href={sitePath(`/storefront/${item.storefront_slug}`)} onClick={(event) => event.stopPropagation()}><Store size={13} /> غرفه {item.storefront_name ?? "فروشنده"}</a> : null}
                     </div>
                     <div className="card-footer">
                       <b>{formatPrice(item.price_amount, item.price_type)}</b>
@@ -3137,7 +3138,7 @@ function App() {
                   <ShieldCheck size={17} aria-label="پروفایل عمومی" />
                 </div>
               ) : null}
-              {selectedItem.storefront_slug ? <a className="storefront-detail-link" href={`/storefront/${selectedItem.storefront_slug}`}><Store size={17} /> مشاهده غرفه {selectedItem.storefront_name ?? "فروشنده"}<ArrowLeft size={16} /></a> : null}
+              {selectedItem.storefront_slug ? <a className="storefront-detail-link" href={sitePath(`/storefront/${selectedItem.storefront_slug}`)}><Store size={17} /> مشاهده غرفه {selectedItem.storefront_name ?? "فروشنده"}<ArrowLeft size={16} /></a> : null}
               {similarItems.length ? (
                 <section className="similar-listings" aria-label="آگهی‌های مشابه">
                   <div className="similar-heading">
@@ -3407,10 +3408,10 @@ createRoot(document.getElementById("root")!).render(
   </React.StrictMode>
 );
 
-if ("serviceWorker" in navigator && import.meta.env.PROD) {
+if ("serviceWorker" in navigator && import.meta.env.PROD && import.meta.env.BASE_URL === "/") {
   window.addEventListener("load", () => {
     navigator.serviceWorker
-      .register("/service-worker.js", { updateViaCache: "none" })
+      .register(sitePath("/service-worker.js"), { updateViaCache: "none" })
       .then((registration) => registration.update())
       .catch(() => undefined);
   });

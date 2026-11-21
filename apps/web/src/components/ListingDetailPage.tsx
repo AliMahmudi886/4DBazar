@@ -1,3 +1,4 @@
+import { sitePath } from "../sitePath.js";
 import { getListingFieldPolicy, type ContentType } from "@four-d/shared";
 import { ArrowLeft, CalendarDays, Eye, Heart, MapPin, MessageCircle, Share2, ShieldCheck, Sparkles, Store, Tag, UserRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -88,7 +89,7 @@ export default function ListingDetailPage({ id, apiBaseUrl, cities, categories, 
   }
 
   if (loading) return <section className="listing-page-state"><Sparkles size={28} /><h1>در حال بارگیری آگهی</h1><p>اطلاعات و رسانه‌های آگهی آماده می‌شود.</p></section>;
-  if (error || !listing) return <section className="listing-page-state"><Sparkles size={28} /><h1>آگهی پیدا نشد</h1><p>این آگهی حذف شده، هنوز منتشر نشده یا آدرس آن نادرست است.</p><a className="submit-button" href="/">بازگشت به بازار <ArrowLeft size={17} /></a></section>;
+  if (error || !listing) return <section className="listing-page-state"><Sparkles size={28} /><h1>آگهی پیدا نشد</h1><p>این آگهی حذف شده، هنوز منتشر نشده یا آدرس آن نادرست است.</p><a className="submit-button" href={sitePath("/")}>بازگشت به بازار <ArrowLeft size={17} /></a></section>;
 
   const city = cities.find((item) => item.id === listing.city_id)?.name_fa ?? "منطقه 4D";
   const category = categories.find((item) => item.id === listing.category_id);
@@ -100,7 +101,7 @@ export default function ListingDetailPage({ id, apiBaseUrl, cities, categories, 
 
   return <main className="listing-detail-page" dir="rtl">
     <nav className="listing-detail-topbar" aria-label="مسیر صفحه">
-      <a className="listing-detail-back" href="/"><ArrowLeft size={17} /> بازگشت به بازار</a>
+      <a className="listing-detail-back" href={sitePath("/")}><ArrowLeft size={17} /> بازگشت به بازار</a>
       <div className="listing-detail-top-actions">
         <button type="button" className={isFavorite ? "icon-button favorite-active" : "icon-button"} aria-label={isFavorite ? "حذف از ذخیره‌شده‌ها" : "ذخیره آگهی"} aria-pressed={isFavorite} title={isFavorite ? "حذف از ذخیره‌شده‌ها" : "ذخیره آگهی"} onClick={() => void onToggleFavorite?.()}><Heart size={18} fill={isFavorite ? "currentColor" : "none"} /></button>
         <button type="button" className="icon-button" aria-label="اشتراک‌گذاری آگهی" title="اشتراک‌گذاری" onClick={() => void share()}><Share2 size={18} /></button>
@@ -138,9 +139,9 @@ export default function ListingDetailPage({ id, apiBaseUrl, cities, categories, 
 
         {businessProfile ? <section className="business-seller-card"><UserRound size={20} /><div><strong>{businessProfile.business_name ?? "فروشنده آگهی"}</strong><span>{[businessProfile.business_type, businessProfile.service_area].filter(Boolean).join(" · ")}</span>{businessProfile.opening_hours ? <small>{businessProfile.opening_hours}</small> : <small>اطلاعات عمومی فروشنده</small>}<IdentityBadge verified={(listing as any).seller_trust?.identity_verified} /></div><ShieldCheck size={17} aria-label="پروفایل عمومی" /></section> : <div className="listing-seller-summary"><UserRound size={17} /><span>فروشنده آگهی</span><IdentityBadge verified={(listing as any).seller_trust?.identity_verified} compact /></div>}
 
-        {listing.storefront_slug ? <a className="listing-storefront-link" href={`/storefront/${listing.storefront_slug}`}><span className="listing-storefront-icon"><Store size={19} /></span><span><strong>{listing.storefront_name ?? "غرفه فروشنده"}</strong><small>مشاهده غرفه و سایر آگهی‌ها</small></span><ArrowLeft size={17} /></a> : <div className="listing-trust-note"><ShieldCheck size={19} /><span><strong>گفت‌وگوی امن در 4D</strong><small>برای هماهنگی، از گفت‌وگوی داخل برنامه استفاده کنید.</small></span></div>}
+        {listing.storefront_slug ? <a className="listing-storefront-link" href={sitePath(`/storefront/${listing.storefront_slug}`)}><span className="listing-storefront-icon"><Store size={19} /></span><span><strong>{listing.storefront_name ?? "غرفه فروشنده"}</strong><small>مشاهده غرفه و سایر آگهی‌ها</small></span><ArrowLeft size={17} /></a> : <div className="listing-trust-note"><ShieldCheck size={19} /><span><strong>گفت‌وگوی امن در 4D</strong><small>برای هماهنگی، از گفت‌وگوی داخل برنامه استفاده کنید.</small></span></div>}
 
-        {listing.related?.length ? <section className="listing-related-panel" aria-label="آگهی‌های مشابه"><h2>شاید این‌ها هم به کارت بیاد</h2><div className="listing-related-grid">{listing.related.map((item) => <a className="listing-related-card" href={`/listing/${item.id}`} key={item.id}><strong>{item.title}</strong><span>{formatPrice(item.price_amount, item.price_type)}</span></a>)}</div></section> : null}
+        {listing.related?.length ? <section className="listing-related-panel" aria-label="آگهی‌های مشابه"><h2>شاید این‌ها هم به کارت بیاد</h2><div className="listing-related-grid">{listing.related.map((item) => <a className="listing-related-card" href={sitePath(`/listing/${item.id}`)} key={item.id}><strong>{item.title}</strong><span>{formatPrice(item.price_amount, item.price_type)}</span></a>)}</div></section> : null}
         <div className="listing-detail-sticky-actions"><button type="button" className="submit-button" onClick={() => void onStartContact?.({ id: listing.id, title: listing.title, status: listing.status })}><MessageCircle size={18} /> شروع گفتگو</button><button type="button" className="ghost-button" onClick={() => void share()}><Share2 size={17} /> اشتراک‌گذاری</button></div>
         {shared ? <p className="listing-share-feedback" role="status">لینک آگهی کپی شد.</p> : null}
       </article>

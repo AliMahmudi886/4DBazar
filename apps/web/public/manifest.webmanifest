@@ -1,25 +1,25 @@
 {
-  "id": "/",
+  "id": "./",
   "name": "بازار محلی 4D",
   "short_name": "بازار 4D",
   "description": "بازار محلی 4D برای گرمه، جاجرم، ایور و درق",
   "dir": "rtl",
   "lang": "fa-IR",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#f7faf8",
   "theme_color": "#176b70",
   "icons": [
     {
-      "src": "/icons/4d-icon-192.png",
+      "src": "./icons/4d-icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/4d-icon-512.png",
+      "src": "./icons/4d-icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
