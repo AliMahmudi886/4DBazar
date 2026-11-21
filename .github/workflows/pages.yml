@@ -33,7 +33,7 @@ jobs:
       - run: npm run build -w @four-d/web
         env:
           FOURD_WEB_BASE: ${{ steps.pages.outputs.base_path }}/
-          VITE_API_BASE_URL: https://api.4dbazar.ir
+          VITE_API_BASE_URL: https://fourd-api-preview.onrender.com
       - name: Prepare static workspace routes
         run: |
           cp apps/web/dist/index.html apps/web/dist/404.html
