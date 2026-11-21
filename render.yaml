@@ -1,0 +1,45 @@
+services:
+  - type: web
+    name: fourd-api-preview
+    runtime: node
+    plan: free
+    branch: audit/enterprise-marketplace-transformation
+    autoDeployTrigger: off
+    buildCommand: npm ci --include=dev && npm run build -w @four-d/shared && npm run build -w @four-d/api
+    startCommand: npm run db:migrate:compiled && node apps/api/dist/main.js
+    healthCheckPath: /health/live
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: API_HOST
+        value: 0.0.0.0
+      - key: CORS_ORIGINS
+        value: https://alimahmudi886.github.io
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: OTP_PROVIDER
+        value: sms
+      - key: SMS_VENDOR
+        value: kavenegar
+      - key: SMS_API_KEY
+        sync: false
+      - key: SMS_SENDER
+        sync: false
+      - key: MEDIA_STORAGE_PROVIDER
+        value: s3
+      - key: MEDIA_S3_BUCKET
+        sync: false
+      - key: MEDIA_S3_REGION
+        sync: false
+      - key: MEDIA_S3_ENDPOINT
+        sync: false
+      - key: MEDIA_S3_ACCESS_KEY_ID
+        sync: false
+      - key: MEDIA_S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: MEDIA_S3_PUBLIC_BASE_URL
+        sync: false
